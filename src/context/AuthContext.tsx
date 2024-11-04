@@ -13,6 +13,7 @@ interface AuthContextType {
   getApiKeys: () => Promise<{ openaiKey: string; perplexityKey: string } | null>;
   setApiKeys: (openaiKey: string, perplexityKey: string) => Promise<void>;
   isOnline: boolean;
+  authInitialized: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,10 +29,12 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [authInitialized, setAuthInitialized] = useState(false);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user);
+      setAuthInitialized(true);
     });
 
     const handleOnline = () => setIsOnline(true);
@@ -136,6 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getApiKeys,
     setApiKeys,
     isOnline,
+    authInitialized
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -27,9 +27,27 @@ const LoadingFallback = () => (
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const [authChecked, setAuthChecked] = React.useState(false);
+
+  React.useEffect(() => {
+    // Wait for initial auth check
+    const checkAuth = async () => {
+      // Small delay to ensure Firebase auth is initialized
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setAuthChecked(true);
+    };
+    checkAuth();
+  }, []);
+
+  // Show loading while checking auth
+  if (!authChecked) {
+    return <LoadingFallback />;
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
   return <>{children}</>;
 };
 

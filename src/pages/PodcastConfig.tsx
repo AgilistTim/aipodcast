@@ -1,40 +1,27 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardBody, Input, Button, Select, SelectItem, Checkbox } from "@nextui-org/react";
 import { PodcastContext } from '../context/PodcastContext';
+import type { PodcastConfig as PodcastConfigType } from '../context/PodcastContext';
 import { perplexitySearch, SearchResult } from '../utils/perplexitySearch';
 import { useAuth } from '../context/AuthContext';
+import { useApiKeys } from '../hooks/useApiKeys';
 import SearchSection from '../components/SearchSection';
 import OpenAI from 'openai';
-
-const VOICE_OPTIONS = [
-  { value: 'alloy', label: 'Alloy (Neutral)' },
-  { value: 'echo', label: 'Echo (Deeper, Confident)' },
-  { value: 'fable', label: 'Fable (Warm, Engaging)' },
-  { value: 'onyx', label: 'Onyx (Deep, Authoritative)' },
-  { value: 'nova', label: 'Nova (Clear, Professional)' },
-  { value: 'shimmer', label: 'Shimmer (Bright, Energetic)' }
-] as const;
-
-const STYLE_OPTIONS = [
-  { value: 'casual', label: 'Casual Conversation' },
-  { value: 'formal', label: 'Formal Discussion' },
-  { value: 'educational', label: 'Educational Content' },
-  { value: 'humorous', label: 'Humorous/Entertainment' },
-  { value: 'debate', label: 'Debate Format' }
-];
+import { VOICE_OPTIONS, STYLE_OPTIONS, OpenAIVoice } from '../constants/voiceOptions';
 
 const PodcastConfig: React.FC = () => {
   const { setPodcastConfig, setTranscript } = useContext(PodcastContext);
   const navigate = useNavigate();
-  const { user, getApiKeys, isOnline } = useAuth();
+  const { getApiKeys, isOnline } = useAuth();
+  const { apiKeysPresent, isLoading } = useApiKeys();
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<PodcastConfigType>({
     podcastName: '',
     voice1Name: '',
     voice2Name: '',
-    voice1: 'echo',
-    voice2: 'nova',
+    voice1: 'echo' as OpenAIVoice,
+    voice2: 'nova' as OpenAIVoice,
     topic: '',
     additionalInfo: '',
     podcastStyle: '',
@@ -46,36 +33,19 @@ const PodcastConfig: React.FC = () => {
   const [selectedResults, setSelectedResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
-  const [apiKeysPresent, setApiKeysPresent] = useState(false);
 
-  useEffect(() => {
-    const checkApiKeys = async () => {
-      try {
-        const keys = await getApiKeys();
-        setApiKeysPresent(!!keys && !!keys.openaiKey && !!keys.perplexityKey);
-      } catch (err) {
-        console.error('Error checking API keys:', err);
-        setError('Failed to check API keys. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    checkApiKeys();
-  }, [getApiKeys]);
-
-  const handleInputChange = (
+  const handleInputChange = useCallback((
     value: string,
-    name: string
+    name: keyof PodcastConfigType
   ) => {
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
+  }, []);
 
-  const handleCheckboxChange = (checked: boolean) => {
+  const handleCheckboxChange = useCallback((checked: boolean) => {
     setFormData(prev => ({ ...prev, useOnlineSearch: checked }));
-  };
+  }, []);
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = useCallback(async (query: string) => {
     setIsSearching(true);
     setSearchError('');
 
@@ -88,9 +58,9 @@ const PodcastConfig: React.FC = () => {
     } finally {
       setIsSearching(false);
     }
-  };
+  }, []);
 
-  const handleResultSelection = (result: SearchResult) => {
+  const handleResultSelection = useCallback((result: SearchResult) => {
     setSelectedResults(prev => {
       const isAlreadySelected = prev.some(r => r.summary === result.summary);
       if (isAlreadySelected) {
@@ -98,9 +68,9 @@ const PodcastConfig: React.FC = () => {
       }
       return [...prev, result];
     });
-  };
+  }, []);
 
-  const generateTranscript = async (config: typeof formData, selectedContent: string) => {
+  const generateTranscript = useCallback(async (config: PodcastConfigType, selectedContent: string) => {
     try {
       const keys = await getApiKeys();
       if (!keys?.openaiKey) {
@@ -138,16 +108,16 @@ const PodcastConfig: React.FC = () => {
       console.error('Error generating transcript:', error);
       throw error;
     }
-  };
+  }, [getApiKeys]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
     const selectedContent = selectedResults
       .map(result => `${result.summary}\n${result.details.join('\n')}`)
       .join('\n\n');
 
-    const configWithSelectedResults = {
+    const configWithSelectedResults: PodcastConfigType = {
       ...formData,
       additionalInfo: [formData.additionalInfo, selectedContent].filter(Boolean).join('\n\n')
     };
@@ -164,7 +134,7 @@ const PodcastConfig: React.FC = () => {
       setError('Failed to generate transcript. Please try again.');
       navigate('/config');
     }
-  };
+  }, [formData, selectedResults, setPodcastConfig, navigate, generateTranscript, setTranscript]);
 
   if (isLoading) {
     return (
@@ -226,7 +196,10 @@ const PodcastConfig: React.FC = () => {
               <Select
                 label="Host 1 Voice"
                 selectedKeys={[formData.voice1]}
-                onChange={(e) => handleInputChange(e.target.value, 'voice1')}
+                onSelectionChange={(keys) => {
+                  const value = Array.from(keys)[0] as OpenAIVoice;
+                  handleInputChange(value, 'voice1');
+                }}
               >
                 {VOICE_OPTIONS.map((voice) => (
                   <SelectItem key={voice.value} value={voice.value}>
@@ -238,7 +211,10 @@ const PodcastConfig: React.FC = () => {
               <Select
                 label="Host 2 Voice"
                 selectedKeys={[formData.voice2]}
-                onChange={(e) => handleInputChange(e.target.value, 'voice2')}
+                onSelectionChange={(keys) => {
+                  const value = Array.from(keys)[0] as OpenAIVoice;
+                  handleInputChange(value, 'voice2');
+                }}
               >
                 {VOICE_OPTIONS.map((voice) => (
                   <SelectItem key={voice.value} value={voice.value}>
@@ -258,7 +234,10 @@ const PodcastConfig: React.FC = () => {
             <Select
               label="Podcast Style"
               selectedKeys={[formData.podcastStyle]}
-              onChange={(e) => handleInputChange(e.target.value, 'podcastStyle')}
+              onSelectionChange={(keys) => {
+                const value = Array.from(keys)[0] as string;
+                handleInputChange(value, 'podcastStyle');
+              }}
               isRequired
             >
               {STYLE_OPTIONS.map((style) => (
