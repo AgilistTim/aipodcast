@@ -5,9 +5,37 @@ export interface SearchResult {
   details: string[];
 }
 
+const PERPLEXITY_ENDPOINT = import.meta.env.VITE_PERPLEXITY_API_URL || 'https://api.perplexity.ai/chat/completions';
+const DEFAULT_MODEL = 'llama-3.1-sonar-small-128k-online';
+
+const normaliseErrorPayload = (payload: unknown): string => {
+  if (!payload) return 'Unknown error';
+  if (typeof payload === 'string') return payload;
+
+  if (typeof payload === 'object') {
+    const data = payload as Record<string, unknown>;
+    if (typeof data.error === 'string') {
+      return data.error;
+    }
+
+    if (data.error && typeof data.error === 'object') {
+      const nested = data.error as Record<string, unknown>;
+      if (typeof nested.message === 'string') {
+        return nested.message;
+      }
+      return JSON.stringify(nested);
+    }
+
+    return JSON.stringify(data);
+  }
+
+  return String(payload);
+};
+
 const handleApiError = (error: unknown): never => {
   if (axios.isAxiosError(error) && error.response) {
-    throw new Error(`API Error: ${error.response.status} - ${error.response.data.error || 'Unknown error'}`);
+    const formattedError = normaliseErrorPayload(error.response.data);
+    throw new Error(`API Error: ${error.response.status} - ${formattedError}`);
   }
   throw new Error('Failed to fetch search results. Please try again.');
 };
@@ -58,9 +86,9 @@ export const perplexitySearch = async (query: string): Promise<SearchResult[]> =
 
   try {
     const response = await axios.post(
-      'https://api.perplexity.ai/chat/completions',
+      PERPLEXITY_ENDPOINT,
       {
-        model: 'llama-3.1-sonar-huge-128k-online',
+        model: import.meta.env.VITE_PERPLEXITY_MODEL || DEFAULT_MODEL,
         messages: [
           {
             role: 'system',
@@ -84,6 +112,7 @@ export const perplexitySearch = async (query: string): Promise<SearchResult[]> =
           }
         ],
         max_tokens: 4000,
+        max_output_tokens: 4000,
         temperature: 0.7
       },
       {
