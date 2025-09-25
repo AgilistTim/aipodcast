@@ -6,7 +6,7 @@ export interface SearchResult {
 }
 
 const PERPLEXITY_ENDPOINT = import.meta.env.VITE_PERPLEXITY_API_URL || 'https://api.perplexity.ai/chat/completions';
-const DEFAULT_MODEL = 'llama-3.1-sonar-small-128k-online';
+const DEFAULT_MODEL = 'sonar';
 
 const normaliseErrorPayload = (payload: unknown): string => {
   if (!payload) return 'Unknown error';
